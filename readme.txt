@@ -5,8 +5,8 @@ for pairing up players in each round: players are not eliminated, and each
  player should be paired with another player with the same number of wins, 
 or as close as possible.
 
-The project includes tournament.sql with table definitions and 
-tournament.py game API realization
+The project includes tournament.sql with tables' definitions and 
+tournament.py game API realization.
 
 Running instructions:
 1. On Vagrant VM istall and configure PostgreSQL
