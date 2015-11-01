@@ -4,37 +4,42 @@
 import psycopg2
 
 
-def connect():
+def connect(database_name = "tournament"):
     """Connect to the PostgreSQL database.  Returns a database connection."""
-    return psycopg2.connect("dbname=tournament")
+    try:
+        db = psycopg2.connect("dbname = {}".format(database_name))
+        cursor = db.cursor()
+        return db, cursor
+    except:
+        print("Can't connect to the database") 
 
 
 def deleteMatches():
     """Remove all the match records from the database."""
-    db = connect()
-    c = db.cursor()
-    c.execute("delete from matches")
+    db, cursor = connect()
+    query = "DELETE FROM matches;"
+    cursor.execute(query)
     db.commit()
     db.close()
 
 
 def deletePlayers():
     """Remove all the player records from the database."""
-    db = connect()
-    c = db.cursor()
-    c.execute("delete from players")
+    db, cursor = connect()
+    query = "DELETE FROM players;"
+    cursor.execute(query)
     db.commit()
     db.close()
 
 
 def countPlayers():
     """Returns the number of players currently registered."""
-    db = connect()
-    c = db.cursor()
-    c.execute("select count(*) as count from players")
-    count = c.fetchall()
+    db, cursor = connect()
+    query = "SELECT COUNT(*) AS count FROM players;"
+    cursor.execute(query)
+    count = cursor.fetchone()[0]
     db.close()
-    return count[0][0]
+    return count
 
 
 def registerPlayer(name):
@@ -44,9 +49,10 @@ def registerPlayer(name):
     Args:
       name: the player's full name (need not be unique).
     """
-    db = connect()
-    c = db.cursor()
-    c.execute("insert into players(name, bye) values(%s, FALSE)", (name,))
+    db, cursor = connect()
+    query = "INSERT INTO players(name, bye) VALUES(%s, FALSE);"
+    parameter = (name,)
+    cursor.execute(query, parameter)
     db.commit()
     db.close()
 
@@ -64,20 +70,13 @@ def playerStandings():
         wins: the number of matches the player has won
         matches: the number of matches the player has played
     """
-    db = connect()
-    c = db.cursor()
-    # view with fields: player's id, name and wins
-    c.execute(
-      "create view winns as select p.player_id, p.name, count(m1.winner_id) " +
-      "as wins from players p left outer join matches m1 on " +
-      "p.player_id=m1.winner_id group by player_id")
+    db, cursor = connect()
     # result table as join winns view and matches table sorted by number of wins
-    c.execute(
-      "select w.player_id as id, w.name, " +
-      "w.wins,(count(m2.loser_id)+w.wins) as matches from winns w left outer " +
-      "join matches m2 on w.player_id=m2.loser_id group by player_id, w.name," +
-      " w.wins order by wins")
-    list = c.fetchall()
+    cursor.execute("select w.player_id as id, w.name, " +
+        "w.wins,(count(m2.loser_id)+w.wins) as matches from winns w left outer " + 
+        "join matches m2 on w.player_id=m2.loser_id group by player_id, w.name," +
+        " w.wins order by wins")
+    list = cursor.fetchall()
     db.close()
     return list
 
@@ -89,10 +88,10 @@ def reportMatch(winner, loser):
       winner:  the id number of the player who won
       loser:  the id number of the player who lost
     """
-    db = connect()
-    c = db.cursor()
-    c.execute("insert into matches (winner_id, loser_id) values(%s,%s)",
-      (winner, loser,))
+    db, cursor = connect()
+    query = "INSERT INTO matches(winner_id, loser_id) VALUES (%s,%s)"
+    parameter = (winner, loser,)
+    cursor.execute(query, parameter)
     db.commit()
     db.close()
 
@@ -116,31 +115,30 @@ def swissPairings():
     in a tournament."""
 
     player_standings = playerStandings()
-    db = connect()
-    c = db.cursor()
+    db, cursor = connect()
     if countPlayers() == 0:
         print "Null"
     if countPlayers() % 2 != 0:   # odd number of players
         bye_player_id = 0   # player to say "bye"
-        c.execute("select player_id, bye from players")
-        list = c.fetchall()
+        query = "SELECT player_id, bye FROM players;"
+        cursor.execute(query)
+        list = cursor.fetchall()
         # find player who did't recive "bye" before
         for row in list:
             if row[1] == 0:
                 bye_player_id = row[0]
                 break
         # update bye status to true or say him 'bye'
-        c.execute("update players set bye = TRUE where player_id = " +
+        cursor.execute("UPDATE players SET bye = TRUE WHERE player_id = " +
           str(bye_player_id))
         # his free win round
         # report new match with winer and loser ids as "bye" player id
         reportMatch(bye_player_id, bye_player_id) 
         # find  match' id of the winner equals loser match 
-        c.execute("select match_id from matches where winner_id = loser_id")
-        match_id_list = c.fetchall()
-        match_id = match_id_list[0][0]
+        cursor.execute("SELECT match_id FROM matches WHERE winner_id = loser_id")
+        match_id = cursor.fetchone()[0]
         # change loser_id to null as it is free win match 
-        c.execute("update matches set loser_id = null where match_id = "+
+        cursor.execute("UPDATE matches SET loser_id = null WHERE match_id = "+
            str(match_id))
         db.commit()
         db.close()
